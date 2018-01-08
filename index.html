@@ -1,0 +1,227 @@
+
+<html>
+<font face = "Verdana" size = "2">
+    &nbsp;&nbsp;FM SYNTH<br><br>&nbsp;
+    An FM synth combining two separate sine waves.<br>&nbsp;
+    The carrier frequency, modulation speed and intensity (index) of each wave can be controlled, along with the frequency of panning modulation.<br>&nbsp;
+    Below the controls is a graphic representation of both the left and right channels of audio.
+</font>
+<head>
+    <title>Font Face</title>
+
+</head>
+
+<body>
+    <script src="js/maxiLib.js"></script>
+    <script src="js/nexusUI.js"></script>
+    <script src="js/mtofarray.js"></script>
+
+    <div style="background:#fff;color:black;width:100%;height:25%">
+    <font face = "Verdana" size="2">
+        <br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;WAVE 1&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;WAVE 2
+        <br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+        Frequency
+        &nbsp;&nbsp;&nbsp;&nbsp;
+        Mod Speed
+        &nbsp;&nbsp;&nbsp;
+        Mod Index
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+        Frequency
+        &nbsp;&nbsp;&nbsp;&nbsp;
+        Mod Speed
+        &nbsp;&nbsp;&nbsp;
+        Mod Index
+        <br>&nbsp;&nbsp;&nbsp;
+        <canvas id="slider1" nx="dial" max="500" width="90"></canvas>
+        <canvas id="slider3" nx="dial" max="1000" width="90" value="68"></canvas>
+        <canvas id="slider5" nx="dial" max="20000" width="90"></canvas>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;        
+        <canvas id="slider2" nx="dial" max="500" width="90"></canvas>
+        <canvas id="slider4" nx="dial" max="1000" width="90"></canvas>
+        <canvas id="slider6" nx="dial" max="20000" width="90"></canvas>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;        
+        <canvas id="slider7" nx="slider" max="1" width="150" height="50"></canvas>
+        &nbsp;&nbsp;&nbsp;   
+        <canvas id="slider8" nx="dial" max="300" width="90" ></canvas>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;    
+        <canvas id="slider9" nx="slider" max="1" width="50" height="150"></canvas>
+        <br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Mix&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Pan Frequency&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Gain
+        </font>
+    </div>
+        <canvas id="plot"></canvas>
+</body>
+
+<script type="text/javascript">
+
+    //audio is initialised
+    var maxiAudio = new maximJs.maxiAudio();
+    maxiAudio.init();
+    maxiAudio.outputIsArray(true, 2);
+
+    //FFT for each channel
+    var myFft1 = new maximJs.maxiFFT();
+    var myFft2 = new maximJs.maxiFFT();
+    var fft1 = new Array(128);
+    var fft2 = new Array(128);
+    var fftSize = 1024;
+    var binFreq = 44100/(fftSize/2);
+    myFft1.setup(fftSize, fftSize, 256);
+    myFft2.setup(fftSize, fftSize, 256);
+
+    //variables for the drawing
+    var canvas=document.querySelector("#plot");
+    var mtofArray;
+    var width = window.innerWidth;
+    var height = window.innerHeight;
+    var context=canvas.getContext("2d");
+    canvas.setAttribute("width",width);
+    canvas.setAttribute("height",height);
+    var size = width / 100;
+    var spacing = ((Math.PI) / 128);
+
+    //oscillators created
+    var osc1 = new maximJs.maxiOsc();
+    var osc2 = new maximJs.maxiOsc();
+    var osc3 = new maximJs.maxiOsc();
+    var osc4 = new maximJs.maxiOsc();
+    //parameters on synth
+    var carrierFreq1 = 128;
+    var carrierFreq2 = 68;
+    var modSpeed1 = 68;
+    var modSpeed2 = 20;
+    var modIndex1 = 240;
+    var modIndex2 = 20;
+    var mix = 0.5;
+    var gain = 0.5;
+
+    //variables for panning
+    var autoPanner = new maximJs.maxiOsc();
+    var stereo = maximJs.maxiTools.getArrayAsVectorDbl([0,0]);
+    var myOutput1 = new maximJs.maxiMix();
+    var pan;
+    var panFreq = 1;
+
+    //GUI variables
+    var slider1, slider2, slider3, slider4, slider5, slider6, slider7, slider8, slider9;
+
+ 
+    
+    maxiAudio.play = function() {
+        
+        //FM equation for each signal is applied
+        var output1 = osc1.sinewave(carrierFreq1 + osc2.sinewave(modSpeed1)*modIndex1);
+        var output2 = osc3.sinewave(carrierFreq2 + osc4.sinewave(modSpeed2)*modIndex2);
+        //mix for each signal calculated
+        var mix2 = 1-mix;
+
+        if (panFreq === 0) {
+            pan = 0.5;
+        } else {
+            //sinewave used for panning oscillator
+            pan = (autoPanner.sinewave(panFreq)+1)/2;
+        }
+        
+        //main output calculated by adding the two waves together
+        myOutput1.stereo(mix2*output1+mix*output2,stereo,pan);
+
+        //FFT's triggered
+        if (myFft1.process(this.output[0])) {
+            myFft1.magsToDB();
+        }
+        if (myFft2.process(this.output[1])) {
+            myFft2.magsToDB();
+        }
+        this.output[0] = gain*stereo.get(0);
+        this.output[1] = gain*stereo.get(1);
+    };
+    
+
+    function draw() {
+    
+        context.clearRect(0, 0, width, height);
+        
+        var n=0;
+        var numAvgs=0;
+        
+        for (var i=0; i<fftSize/2; i++) {
+                    
+            //fft for left and right channel calculated
+            fft1[n]+=myFft1.getMagnitudeDB(i);
+            fft2[n]+=myFft2.getMagnitudeDB(i);
+                    
+            numAvgs++;
+                    
+            //code for graph modified from Spread+constQ_Spectrum by Mick Grierson, turned into a two channel radial graph
+
+            if (i * binFreq > mtofArray[n]){
+                fft1[n]/=numAvgs;
+                fft2[n]/=numAvgs;
+                n++;
+                fft1[n]=0;
+                fft2[n]=0;
+                numAvgs=0;
+            }
+        }
+
+        for (var i = 0; i < 128; i++) {
+            context.beginPath();
+            //two separate graphs drawn, one on top of the other
+            context.moveTo( (width/4)+(Math.cos(-i*spacing)*size*fft1[i]),
+                            300 + (Math.sin(-i*spacing)*size*fft1[i]) );
+            context.lineTo( (width/4) + (Math.cos(-i*spacing)*fft1[i]),
+                            300 + (Math.sin(-i*spacing)*fft1[i]));
+            context.moveTo( (width/4) + (Math.cos(i*spacing)*size*fft2[i]),
+                            300 + (Math.sin(i*spacing)*size*fft2[i]));
+            context.lineTo( (width/4) + (Math.cos(i*spacing)*fft2[i]),
+                            300 + (Math.sin(i*spacing)*fft2[i]));
+            context.stroke();
+            context.closePath();
+        }
+    }
+    
+    //functions for the GUI
+    nx.onload = function(){
+        nx.colorize('fill', "#999999");
+        nx.colorize('accent', "#3fa854");
+        slider1.on('*', slider1Changed);  
+        slider3.on('*', slider3Changed); 
+        slider5.on('*', slider5Changed); 
+        slider2.on('*', slider2Changed); 
+        slider4.on('*', slider4Changed);  
+        slider6.on('*', slider6Changed);  
+        slider7.on('*', slider7Changed);  
+        slider8.on('*', slider8Changed);  
+        slider9.on('*', slider8Changed);  
+    };
+    function slider1Changed(data){
+        carrierFreq1=data.value;
+    }
+    function slider2Changed(data){
+        carrierFreq2 = data.value;
+    }
+    function slider3Changed(data){
+        modSpeed1=data.value;
+    }
+    function slider4Changed(data){        
+        modSpeed2=data.value;
+    }
+    function slider5Changed(data){
+        modIndex1=data.value;
+    }
+    function slider6Changed(data){
+        modIndex2=data.value;
+    }
+    function slider7Changed(data){
+        mix=data.value;
+    }
+    function slider8Changed(data){
+        panFreq=data.value;
+    }
+    function slider9Changed(data){
+        gain=data.value;
+    }
+    setInterval(draw, 10);
+</script>
+
+</html>
